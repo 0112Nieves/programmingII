@@ -52,6 +52,18 @@ void gameDraw(RenderWindow& window){
     }
 }
 
+bool checkKeyPress(RenderWindow& window) {
+    // 檢查 A、F、H、L 鍵
+    if((Keyboard::isKeyPressed(Keyboard::A) && flags[3] == 0) || (Keyboard::isKeyPressed(Keyboard::F)  && flags[3] == 1) 
+    || (Keyboard::isKeyPressed(Keyboard::H) && flags[3] == 2) || (Keyboard::isKeyPressed(Keyboard::L) && flags[3] == 3)){
+        for(int i = 3; i > 0; i--){
+            flags[i] = flags[i-1];
+        }
+        flags[0] = rand() % 4;
+        return true;
+    }
+    else return false;
+}
 
 int main() {
     RenderWindow window(VideoMode(WIDTH, HEIGHT), "SFML Window");
@@ -63,6 +75,9 @@ int main() {
                 window.close();
             }
         }
+
+        // 在每幀繪製之前檢查是否有按下指定的按鍵
+        checkKeyPress(window);
 
         window.clear(Color::White);
         gameDraw(window);
