@@ -1,87 +1,138 @@
-# include <iostream>
-# include <cstdlib>
-# include <ctime>
-# include <SFML/Graphics.hpp>
-# define WIDTH 400
-# define HEIGHT 700
-# define GRID_W 100
-# define GRID_H 150
-# define INTERVAL 100
-using namespace std;
+#include <SFML/Graphics.hpp>
+#include <iostream>
+#include <vector>
+#include <ctime>
+#include <cstdlib>
+
 using namespace sf;
+using namespace std;
 
-int flags[4] = {0};
+const int WIDTH = 400;
+const int HEIGHT = 700;
+const int GRID_W = 100;
+const int GRID_H = 150;
+const float SPEED = 250.0f;
+const float SPAWN_INTERVAL = 0.8f;
+const float TARGET_Y = HEIGHT - GRID_H;
+const float TOLERANCE = 60.0f;
 
-void init(){
-    srand(time(NULL));
-    for(int i = 0; i < 4; i++){
-        flags[i] = rand() % 4;
-    }
+struct Tile {
+    int lane;
+    float y;
+    bool active;
+};
+
+vector<Tile> tiles;
+bool isDone = false;
+int score = 0; // 分數
+
+void spawnTile() {
+    Tile t;
+    t.lane = rand() % 4;
+    t.y = 0;
+    t.active = true;
+    tiles.push_back(t);
 }
 
-void gameDraw(RenderWindow& window){
-    const float lineThickness = 2.0f; // 設定線條寬度
-
-    // 畫橫線
-    for(int i = 0; i < 4; i++){
-        float y = i * GRID_H + INTERVAL;
-        RectangleShape hLine(Vector2f(400, lineThickness));
-        hLine.setPosition(0, y);
-        hLine.setFillColor(Color::Black);
-        window.draw(hLine);
-    }
-
-    // 畫直線
-    for(int i = 0; i < 4; i++){
-        float x = i * GRID_W;
-        RectangleShape vLine(Vector2f(lineThickness, 700 - INTERVAL));
-        vLine.setPosition(x, INTERVAL);
-        vLine.setFillColor(Color::Black);
-        window.draw(vLine);
-    }
-
-    // 畫黑框
-    for(int i = 0; i < 4; i++){
-        int x = flags[i] * GRID_W;
-        int y = i * GRID_H + INTERVAL;
-
-        RectangleShape rect(Vector2f(GRID_W, GRID_H));
-        rect.setPosition(x, y);
-        rect.setFillColor(Color::Black);
-        window.draw(rect);
-    }
-}
-
-bool checkKeyPress(RenderWindow& window) {
-    // 檢查 A、F、H、L 鍵
-    if((Keyboard::isKeyPressed(Keyboard::A) && flags[3] == 0) || (Keyboard::isKeyPressed(Keyboard::F)  && flags[3] == 1) 
-    || (Keyboard::isKeyPressed(Keyboard::H) && flags[3] == 2) || (Keyboard::isKeyPressed(Keyboard::L) && flags[3] == 3)){
-        for(int i = 3; i > 0; i--){
-            flags[i] = flags[i-1];
+bool handleKeyPress(int lanePressed) {
+    for (auto& tile : tiles) {
+        if (tile.active && tile.lane == lanePressed) {
+            if (abs(tile.y - TARGET_Y) < TOLERANCE) {
+                tile.active = false;
+                score += 1; // 成功點擊加分
+                return true;
+            }
         }
-        flags[0] = rand() % 4;
-        return true;
     }
-    else return false;
+    // isDone = true;
+    return false;
 }
 
 int main() {
-    RenderWindow window(VideoMode(WIDTH, HEIGHT), "SFML Window");
-    init();
+    srand(time(0));
+    RenderWindow window(VideoMode(WIDTH, HEIGHT), "別踩白塊兒 - 加分版");
+    Clock clock, spawnClock;
+
+    // 設定 FPS 上限
+    window.setFramerateLimit(60);
+
+    // 載入字型
+    Font font;
+    if (!font.loadFromFile("Arial.ttf")) {
+        cerr << "❌ 無法載入字型檔 arial.ttf" << endl;
+        return -1;
+    }
+
+    // 分數文字
+    Text scoreText;
+    scoreText.setFont(font);
+    scoreText.setCharacterSize(30);
+    scoreText.setFillColor(Color::Black);
+    scoreText.setPosition(WIDTH / 2 - 50, 10); // 上方中央
+
     while (window.isOpen()) {
+        float dt = clock.restart().asSeconds();
+
+        // 處理事件
         Event event;
         while (window.pollEvent(event)) {
-            if (event.type == Event::Closed) {
+            if (event.type == Event::Closed)
                 window.close();
+        }
+
+        // 鍵盤處理
+        if (Keyboard::isKeyPressed(Keyboard::A)) handleKeyPress(0);
+        if (Keyboard::isKeyPressed(Keyboard::F)) handleKeyPress(1);
+        if (Keyboard::isKeyPressed(Keyboard::H)) handleKeyPress(2);
+        if (Keyboard::isKeyPressed(Keyboard::L)) handleKeyPress(3);
+
+        // 更新位置
+        for (auto& tile : tiles) {
+            tile.y += SPEED * dt;
+        }
+
+        // 檢查是否掉出還沒按
+        for (auto& tile : tiles) {
+            if (tile.y > HEIGHT && tile.active) {
+                isDone = true;
             }
         }
 
-        // 在每幀繪製之前檢查是否有按下指定的按鍵
-        checkKeyPress(window);
+        // 生成新方塊
+        if (spawnClock.getElapsedTime().asSeconds() > SPAWN_INTERVAL) {
+            spawnTile();
+            spawnClock.restart();
+        }
 
+        // 更新分數文字內容
+        scoreText.setString("Score: " + to_string(score));
+
+        // 畫面更新
         window.clear(Color::White);
-        gameDraw(window);
+
+        // 畫分數
+        window.draw(scoreText);
+
+        // 畫觸發區
+        RectangleShape line(Vector2f(WIDTH, 2));
+        line.setPosition(0, TARGET_Y + GRID_H);
+        line.setFillColor(Color(200, 0, 0));
+        window.draw(line);
+
+        // 畫黑塊
+        for (auto& tile : tiles) {
+            RectangleShape rect(Vector2f(GRID_W, GRID_H));
+            rect.setPosition(tile.lane * GRID_W, tile.y);
+            rect.setFillColor(tile.active ? Color::Black : Color(156, 156, 156));
+            window.draw(rect);
+        }
+
         window.display();
+
+        if (isDone) {
+            cout << "Game Over! Final Score: " << score << endl;
+            window.close();
+        }
     }
 
     return 0;
